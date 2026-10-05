@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "appmana-k8s-resources-injection"
+version = "0.1.0"
+description = "Canonical distributed-launch topology and env (MASTER_ADDR, NODE_RANK, PET_*) for JobSet, LeaderWorkerSet and Job pods, with fill-only-if-absent injection into Kubernetes objects"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/AppMana/packages-k8s-resources-injection"
+Repository = "https://github.com/AppMana/packages-k8s-resources-injection"
+Issues = "https://github.com/AppMana/packages-k8s-resources-injection/issues"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "jsonpatch",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/appmana_k8s_resources_injection"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
