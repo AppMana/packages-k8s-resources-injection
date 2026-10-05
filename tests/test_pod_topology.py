@@ -277,3 +277,35 @@ def test_topology_validates_its_fields():
         Topology(num_nodes=1, node_rank=0, master_addr="a", master_port=70000)
     with pytest.raises(ValueError):
         Topology(num_nodes=1, node_rank=0, master_addr="a", master_port=1, processes_per_node="many")
+
+
+# One node: rank 0 is the pod itself
+
+
+def test_single_pod_jobset_without_dns_hostnames_is_local():
+    meta, spec = jobset_pod(replicas=1)
+    spec.pop("subdomain")
+    topology = jobset_pod_topology(meta, spec, pods_per_job=1, port=RANGE)
+    assert (topology.num_nodes, topology.node_rank, topology.master_addr, topology.hosts) == (1, 0, "127.0.0.1", ())
+    assert topology.master_port == range_port(f"{JOBSET_UID_A}/trainer/0")
+
+
+def test_single_pod_job_without_subdomain_is_local():
+    topology = job_pod_topology(*job_pod(subdomain=None), completions=1, port=RANGE)
+    assert (topology.num_nodes, topology.master_addr, topology.master_port) == (1, "127.0.0.1", range_port(JOB_UID))
+
+
+def test_single_pod_non_indexed_job_is_local():
+    meta, spec = job_pod(subdomain=None)
+    for field in ("labels", "annotations"):
+        meta[field].pop("batch.kubernetes.io/job-completion-index")
+    topology = job_pod_topology(meta, spec, completions=1, port=RANGE)
+    assert (topology.num_nodes, topology.node_rank, topology.master_addr) == (1, 0, "127.0.0.1")
+
+
+def test_multi_pod_non_indexed_job_has_no_ranks():
+    meta, spec = job_pod()
+    for field in ("labels", "annotations"):
+        meta[field].pop("batch.kubernetes.io/job-completion-index")
+    with pytest.raises(TopologyError, match="Indexed"):
+        job_pod_topology(meta, spec, completions=2)

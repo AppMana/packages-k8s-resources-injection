@@ -138,10 +138,24 @@ def test_elastic_node_range_is_rejected():
         topology_from_environment(jobset_env() | {"PET_NNODES": "1:4"})
 
 
+def test_complete_canonical_env_needs_no_workload_env():
+    env = {"MASTER_ADDR": "10.0.0.4", "MASTER_PORT": "23456", "NODE_RANK": "1", "NNODES": "2", "JOBSET_NAME": "js"}
+    topology = topology_from_environment(env)
+    assert (topology.node_rank, topology.num_nodes, topology.hosts) == (1, 2, ())
+
+
+def test_incomplete_canonical_env_still_needs_the_workload_env():
+    with pytest.raises(TopologyError, match="JOBSET_REPLICATEDJOB_NAME"):
+        topology_from_environment({"MASTER_PORT": "23456", "JOBSET_NAME": "js"})
+
+
 def test_manifest_values_win_over_derived_ones():
+    # Another address of rank 0 leaves the node list valid; another node count does not.
     topology = topology_from_environment(jobset_env(job_index=1) | {"MASTER_ADDR": "10.0.0.4"})
     assert topology.master_addr == "10.0.0.4"
-    assert topology.hosts == ()
+    assert topology.hosts == ("qwen-image-trainer-0-0.qwen-image", "qwen-image-trainer-1-0.qwen-image")
+    resized = topology_from_environment(jobset_env(job_index=1) | {"NNODES": "4", "JOBSET_JOB_COMPLETIONS": "1"})
+    assert (resized.num_nodes, resized.hosts) == (4, ())
 
 
 def test_lws_env():

@@ -136,11 +136,18 @@ def topology_from_environment(
         nproc = _get(env, keys.PET_NPROC_PER_NODE)
         processes_per_node = _processes_per_node(nproc) if nproc is not None else "auto"
 
-    if _get(env, keys.LWS_LEADER_ADDRESS_ENV) is not None:
-        derived = _lws(env)
-    elif _get(env, JOBSET_NAME_ENV) is not None:
-        derived = _jobset(env, pods_per_job, num_nodes)
-    else:
+    complete = None not in (master_addr, master_port, node_rank, num_nodes)
+    try:
+        if _get(env, keys.LWS_LEADER_ADDRESS_ENV) is not None:
+            derived = _lws(env)
+        elif _get(env, JOBSET_NAME_ENV) is not None:
+            derived = _jobset(env, pods_per_job, num_nodes)
+        else:
+            derived = None
+    except TopologyError:
+        # With every canonical fact set, the workload env only adds the hosts list.
+        if not complete:
+            raise
         derived = None
 
     if derived is None:
@@ -173,7 +180,8 @@ def topology_from_environment(
     derived_nodes, derived_rank, derived_addr, derived_hosts = derived
     final_nodes = num_nodes if num_nodes is not None else derived_nodes
     final_addr = master_addr if master_addr is not None else derived_addr
-    hosts = derived_hosts if (final_addr == derived_addr and final_nodes == derived_nodes) else ()
+    # Another address for rank 0 leaves the node list valid; another node count does not.
+    hosts = derived_hosts if final_nodes == derived_nodes else ()
     return Topology(
         num_nodes=final_nodes,
         node_rank=node_rank if node_rank is not None else derived_rank,

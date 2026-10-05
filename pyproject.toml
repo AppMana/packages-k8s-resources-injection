@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "appmana-k8s-resources-injection"
-version = "0.1.0"
+version = "0.1.1"
 description = "Canonical distributed-launch topology and env (MASTER_ADDR, NODE_RANK, PET_*) for JobSet, LeaderWorkerSet and Job pods, with fill-only-if-absent injection into Kubernetes objects"
 readme = "README.md"
 requires-python = ">=3.10"

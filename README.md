@@ -21,7 +21,7 @@ dependencies.
 Python 3.10 or newer. Install the wheel from a GitHub release:
 
 ```shell
-uv pip install "appmana-k8s-resources-injection @ https://github.com/AppMana/packages-k8s-resources-injection/releases/download/v0.1.0/appmana_k8s_resources_injection-0.1.0-py3-none-any.whl"
+uv pip install "appmana-k8s-resources-injection @ https://github.com/AppMana/packages-k8s-resources-injection/releases/download/v0.1.1/appmana_k8s_resources_injection-0.1.1-py3-none-any.whl"
 ```
 
 ## Env contract
@@ -55,6 +55,9 @@ Topology per workload:
 | JobSet | the pod's ReplicatedJob: `replicas × completions` | `job-index × completions + completion-index` | `<jobset>-<replicatedJob>-0-0.<subdomain>` |
 | LeaderWorkerSet | one group: `size` | worker index | `<lws>-<group>.<subdomain>.<namespace>` (`LWS_LEADER_ADDRESS`) |
 | Indexed Job | `completions` | completion index | `<job>-0.<subdomain>` |
+
+A world of one pod with no pod DNS name (no subdomain, or a Job that is not
+Indexed) has rank 0 at `127.0.0.1`, torchrun's default.
 
 Rank 0's JobSet address uses the format of JobSet's coordinator endpoint and
 of Kubeflow Trainer's `PET_MASTER_ADDR`. A JobSet whose generated pod names
@@ -193,7 +196,8 @@ os.execvp(argv[0], argv + ["--module", "my_trainer", "--deepspeed"])
 ```
 
 `topology_from_environment()` takes each fact from the canonical env when it
-is set: by the manifest, or by a webhook using this package. Otherwise it
+is set: by the manifest, or by a webhook using this package. When all four
+facts are set, the workload env only adds the hosts list. Otherwise it
 derives the fact from the workload env:
 
 - **LeaderWorkerSet:** `LWS_LEADER_ADDRESS`, `LWS_GROUP_SIZE` and

@@ -193,6 +193,19 @@ def _positive(value: int, what: str) -> int:
     return value
 
 
+def _local(*, port: int, processes_per_node: Union[int, str], identity: Union[str, None]) -> Topology:
+    """A world of one pod: rank 0 is the pod itself, at torchrun's default
+    --master-addr."""
+    return Topology(
+        num_nodes=1,
+        node_rank=0,
+        master_addr=keys.LOCAL_MASTER_ADDR,
+        master_port=port,
+        processes_per_node=processes_per_node,
+        rendezvous_identity=identity,
+    )
+
+
 # JobSet
 
 
@@ -248,10 +261,14 @@ def jobset_pod_topology(
     replicated_job = _required(metadata, keys.JOBSET_REPLICATED_JOB_NAME)
     replicas = _required_index(metadata, keys.JOBSET_REPLICATED_JOB_REPLICAS)
     job_index = _required_index(metadata, keys.JOBSET_JOB_INDEX)
+    identity = jobset_rendezvous_identity(metadata)
+    port_needs = "the JobSet uid, replicatedjob-name and restart-attempt labels"
     completion_index = _index(_value(metadata, keys.JOB_COMPLETION_INDEX), keys.JOB_COMPLETION_INDEX)
+    subdomain = (spec or {}).get("subdomain")
+    if replicas * pods_per_job == 1 and (completion_index is None or not subdomain):
+        return _local(port=_resolve_port(port, identity, port_needs), processes_per_node=processes_per_node, identity=identity)
     if completion_index is None:
         raise TopologyError(f"pod has no {keys.JOB_COMPLETION_INDEX}: its Job is not in Indexed completion mode")
-    subdomain = (spec or {}).get("subdomain")
     if not subdomain:
         raise TopologyError(
             "pod has no spec.subdomain: the JobSet disables DNS hostnames, so rank 0 has no stable name"
@@ -265,12 +282,11 @@ def jobset_pod_topology(
         job_index=job_index,
         completion_index=completion_index,
     )
-    identity = jobset_rendezvous_identity(metadata)
     return Topology(
         num_nodes=num_nodes,
         node_rank=node_rank,
         master_addr=hosts[0],
-        master_port=_resolve_port(port, identity, "the JobSet uid, replicatedjob-name and restart-attempt labels"),
+        master_port=_resolve_port(port, identity, port_needs),
         processes_per_node=processes_per_node,
         hosts=hosts,
         rendezvous_identity=identity,
@@ -453,23 +469,26 @@ def job_pod_topology(
     ``<job>-<index>``; they resolve when ``spec.subdomain`` names a headless
     Service selecting them. The derived port's identity is the Job uid."""
     job_name = _required(metadata, keys.JOB_NAME)
+    _positive(completions, "completions")
+    identity = _value(metadata, keys.JOB_CONTROLLER_UID)
+    port_needs = f"the {keys.JOB_CONTROLLER_UID} label"
     completion_index = _index(_value(metadata, keys.JOB_COMPLETION_INDEX), keys.JOB_COMPLETION_INDEX)
+    subdomain = (spec or {}).get("subdomain")
+    if completions == 1 and (completion_index is None or not subdomain):
+        return _local(port=_resolve_port(port, identity, port_needs), processes_per_node=processes_per_node, identity=identity)
     if completion_index is None:
         raise TopologyError(f"pod has no {keys.JOB_COMPLETION_INDEX}: its Job is not in Indexed completion mode")
-    subdomain = (spec or {}).get("subdomain")
     if not subdomain:
         raise TopologyError("Job pod has no spec.subdomain, so rank 0 has no DNS name")
-    _positive(completions, "completions")
     if completion_index >= completions:
         raise TopologyError(f"completion index {completion_index} is outside completions={completions}")
     _check_hostname(f"{job_name}-{completions - 1}")
     hosts = tuple(f"{job_name}-{index}.{subdomain}" for index in range(completions))
-    identity = _value(metadata, keys.JOB_CONTROLLER_UID)
     return Topology(
         num_nodes=completions,
         node_rank=completion_index,
         master_addr=hosts[0],
-        master_port=_resolve_port(port, identity, f"the {keys.JOB_CONTROLLER_UID} label"),
+        master_port=_resolve_port(port, identity, port_needs),
         processes_per_node=processes_per_node,
         hosts=hosts,
         rendezvous_identity=identity,
